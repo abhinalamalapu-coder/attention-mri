@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attention MRI - Focus Session</title>
+<script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    background: #111;
+    color: #eee;
+    margin: 0;
+    padding: 16px;
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  h1 { font-size: 1.3em; text-align: center; }
+  .card {
+    background: #1c1c1e;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  video { display: none; }
+  canvas { display: none; }
+  #preview {
+    width: 100%;
+    border-radius: 10px;
+    background: #000;
+    display: block;
+    margin-bottom: 10px;
+  }
+  button {
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    font-size: 1em;
+    font-weight: 600;
+    margin-top: 8px;
+  }
+  button:disabled { opacity: 0.5; }
+  #sessionBtn { background: #30d158; color: #000; }
+  #sessionBtn.active { background: #ff453a; color: #fff; }
+  #status { text-align: center; margin-top: 10px; font-size: 0.95em; color: #aaa; }
+  .stat-row { display: flex; justify-content: space-between; margin-top: 8px; }
+  .stat-row span:first-child { color: #aaa; }
+  #taskInput {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    background: #2c2c2e;
+    color: #eee;
+    margin-bottom: 8px;
+  }
+  .task {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #2c2c2e;
+  }
+  .task input { margin-right: 10px; transform: scale(1.3); }
+  .task.done span { text-decoration: line-through; color: #777; }
+  .task button {
+    width: auto;
+    margin-left: auto;
+    background: none;
+    color: #ff453a;
+    padding: 4px 8px;
+    font-weight: 400;
+  }
+
+  /* Focus mode: page-level dimming only - this cannot control your phone's
+     actual hardware brightness, only how this page itself looks */
+  #focusOverlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.93);
+    z-index: 999;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #focusOverlay.active { display: flex; }
+  #focusOverlay video { display: block; width: 220px; border-radius: 12px; margin-bottom: 24px; }
+  #focusTimer { font-size: 2.5em; font-weight: 700; margin-bottom: 8px; }
+  #focusPresence { font-size: 1.1em; color: #aaa; margin-bottom: 30px; }
+  #focusStopBtn { width: 200px; background: #ff453a; color: #fff; }
+</style>
+</head>
+<body>
+
+<h1>Attention MRI</h1>
+
+<div class="card">
+  <button id="sessionBtn" disabled>Loading face detection...</button>
+  <div id="status">Camera only runs during an active session. No video is ever recorded or saved - only a presence percentage.</div>
+</div>
+
+<div class="card" id="summaryCard">
+  <h3 style="margin-top:0;">Today's Summary</h3>
+  <div class="stat-row"><span>Sessions</span><span id="sumSessions">0</span></div>
+  <div class="stat-row"><span>Total focus time</span><span id="sumTime">0:00</span></div>
+  <div class="stat-row"><span>Average presence</span><span id="sumPresence">--</span></div>
+</div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Today's Goals</h3>
+  <input id="taskInput" placeholder="Add a goal...">
+  <button id="addTaskBtn" style="background:#2c2c2e;color:#eee;">Add</button>
+  <div id="taskList"></div>
+  <div class="stat-row"><span>Completed today</span><span id="taskProgress">0 / 0</span></div>
+</div>
+
+<!-- Hidden elements used for camera capture, not shown to the user -->
+<video id="video" autoplay playsinline muted></video>
+<canvas id="canvas"></canvas>
+
+<!-- Full-screen focus mode shown only during an active session -->
+<div id="focusOverlay">
+  <video id="focusPreview" autoplay playsinline muted></video>
+  <div id="focusTimer">0:00</div>
+  <div id="focusPresence">Presence: --</div>
+  <button id="focusStopBtn">Stop Session</button>
+</div>
+
+<script>
+  const video = document.getElementById('video');
+  const focusPreview = document.getElementById('focusPreview');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  const sessionBtn = document.getElementById('sessionBtn');
+  const statusEl = document.getElementById('status');
+  const focusOverlay = document.getElementById('focusOverlay');
+  const focusTimerEl = document.getElementById('focusTimer');
+  const focusPresenceEl = document.getElementById('focusPresence');
+  const focusStopBtn = document.getElementById('focusStopBtn');
+
+  let stream = null;
+  let sessionActive = false;
+  let sessionStart = null;
+  let timerInterval = null;
+  let detectionInterval = null;
+  let activeFrames = 0;
+  let totalFrames = 0;
+  let modelsLoaded = false;
+
+  const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+  const CHECK_INTERVAL_MS = 1500;
+
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  window.addEventListener('load', async () => {
+    // wait for the deferred face-api.js script to finish loading
+    const waitForFaceApi = () => new Promise(resolve => {
+      const check = () => (window.faceapi ? resolve() : setTimeout(check, 100));
+      check();
+    });
+    await waitForFaceApi();
+
+    try {
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+      modelsLoaded = true;
+      sessionBtn.disabled = false;
+      sessionBtn.textContent = 'Start Focus Session';
+    } catch (err) {
+      statusEl.textContent = 'Could not load face detection model. Check your internet connection and reload.';
+    }
+
+    renderTasks();
+    renderSummary();
+  });
+
+  async function startSession() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    } catch (err) {
+      statusEl.textContent = 'Camera access denied or unavailable.';
+      return;
+    }
+    video.srcObject = stream;
+    focusPreview.srcObject = stream;
+
+    sessionActive = true;
+    sessionStart = Date.now();
+    activeFrames = 0;
+    totalFrames = 0;
+
+    focusOverlay.classList.add('active');
+    focusTimerEl.textContent = '0:00';
+    focusPresenceEl.textContent = 'Presence: --';
+
+    timerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - sessionStart) / 1000);
+      focusTimerEl.textContent = formatTime(elapsed);
+    }, 1000);
+
+    detectionInterval = setInterval(checkFace, CHECK_INTERVAL_MS);
+  }
+
+  async function checkFace() {
+    if (!sessionActive || video.videoWidth === 0 || !modelsLoaded) return;
+
+    try {
+      const detection = await faceapi.detectSingleFace(
+        video,
+        new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 })
+      );
+      totalFrames++;
+      if (detection) activeFrames++;
+
+      const pct = totalFrames > 0 ? Math.round((activeFrames / totalFrames) * 100) : 0;
+      focusPresenceEl.textContent = `Presence: ${pct}%`;
+    } catch (err) {
+      // detection hiccup on a single frame - skip it, not fatal
+    }
+  }
+
+  function stopSession() {
+    sessionActive = false;
+    clearInterval(timerInterval);
+    clearInterval(detectionInterval);
+
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      stream = null;
+    }
+
+    const elapsedSeconds = Math.floor((Date.now() - sessionStart) / 1000);
+    const presencePct = totalFrames > 0 ? Math.round((activeFrames / totalFrames) * 100) : null;
+
+    saveSessionToHistory(elapsedSeconds, presencePct);
+
+    focusOverlay.classList.remove('active');
+    renderSummary();
+  }
+
+  sessionBtn.addEventListener('click', startSession);
+  focusStopBtn.addEventListener('click', stopSession);
+
+  // ---------- Daily history (sessions + tasks), stored locally on this device only ----------
+
+  function todayKey() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function loadHistory() {
+    const raw = localStorage.getItem('attentionMriHistory');
+    return raw ? JSON.parse(raw) : {};
+  }
+
+  function saveHistory(history) {
+    localStorage.setItem('attentionMriHistory', JSON.stringify(history));
+  }
+
+  function getToday(history) {
+    const key = todayKey();
+    if (!history[key]) history[key] = { sessions: [], tasks: [] };
+    return history[key];
+  }
+
+  function saveSessionToHistory(seconds, presencePct) {
+    const history = loadHistory();
+    const today = getToday(history);
+    today.sessions.push({ seconds, presencePct, endedAt: new Date().toISOString() });
+    saveHistory(history);
+  }
+
+  function renderSummary() {
+    const history = loadHistory();
+    const today = getToday(history);
+    const sessions = today.sessions;
+
+    document.getElementById('sumSessions').textContent = sessions.length;
+
+    const totalSeconds = sessions.reduce((sum, s) => sum + s.seconds, 0);
+    document.getElementById('sumTime').textContent = formatTime(totalSeconds);
+
+    const withPresence = sessions.filter(s => s.presencePct !== null);
+    if (withPresence.length > 0) {
+      const avg = Math.round(withPresence.reduce((sum, s) => sum + s.presencePct, 0) / withPresence.length);
+      document.getElementById('sumPresence').textContent = avg + '%';
+    } else {
+      document.getElementById('sumPresence').textContent = '--';
+    }
+  }
+
+  // ---------- Tasks ----------
+
+  const taskInput = document.getElementById('taskInput');
+  const addTaskBtn = document.getElementById('addTaskBtn');
+  const taskListEl = document.getElementById('taskList');
+  const taskProgressEl = document.getElementById('taskProgress');
+
+  function getTodayTasks() {
+    const history = loadHistory();
+    return getToday(history).tasks;
+  }
+
+  function setTodayTasks(tasks) {
+    const history = loadHistory();
+    getToday(history).tasks = tasks;
+    saveHistory(history);
+  }
+
+  function renderTasks() {
+    const tasks = getTodayTasks();
+    taskListEl.innerHTML = '';
+
+    tasks.forEach((task, i) => {
+      const div = document.createElement('div');
+      div.className = 'task' + (task.done ? ' done' : '');
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = task.done;
+      checkbox.addEventListener('change', () => {
+        tasks[i].done = checkbox.checked;
+        setTodayTasks(tasks);
+        renderTasks();
+      });
+
+      const span = document.createElement('span');
+      span.textContent = task.text;
+
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '✕';
+      delBtn.addEventListener('click', () => {
+        tasks.splice(i, 1);
+        setTodayTasks(tasks);
+        renderTasks();
+      });
+
+      div.appendChild(checkbox);
+      div.appendChild(span);
+      div.appendChild(delBtn);
+      taskListEl.appendChild(div);
+    });
+
+    const completed = tasks.filter(t => t.done).length;
+    taskProgressEl.textContent = `${completed} / ${tasks.length}`;
+  }
+
+  addTaskBtn.addEventListener('click', () => {
+    const text = taskInput.value.trim();
+    if (!text) return;
+    const tasks = getTodayTasks();
+    tasks.push({ text, done: false });
+    setTodayTasks(tasks);
+    taskInput.value = '';
+    renderTasks();
+  });
+
+  taskInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addTaskBtn.click();
+  });
+</script>
+
+</body>
+</html>
