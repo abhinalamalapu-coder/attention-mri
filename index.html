@@ -108,8 +108,8 @@
 
 <div class="card">
   <h3 style="margin-top:0;">Computer Connection (optional)</h3>
-  <input id="computerSetup" placeholder="e.g. 192.168.1.167:5000" value="">
-  <div style="font-size:0.8em; color:#888;">Enter your computer's IP and port from local_server.py. Both devices must be on the same WiFi.</div>
+  <input id="computerSetup" placeholder="e.g. https://abc123.ngrok-free.app" value="">
+  <div style="font-size:0.8em; color:#888;">Paste the HTTPS link from ngrok (run "ngrok http 5000" on your computer). A plain IP address will likely be blocked by Safari's security settings.</div>
 </div>
 
 <div class="card" id="summaryCard">
@@ -166,13 +166,15 @@
   });
 
   async function checkComputer() {
-    const addr = computerSetupInput.value.trim();
+    let addr = computerSetupInput.value.trim();
     if (!addr) {
       focusComputerEl.textContent = 'Computer idle: not connected';
       return;
     }
+    // accept either a full URL (https://...) or a bare IP:port
+    const base = addr.startsWith('http') ? addr.replace(/\/$/, '') : `http://${addr}`;
     try {
-      const res = await fetch(`http://${addr}/status`, { cache: 'no-store' });
+      const res = await fetch(`${base}/status`, { cache: 'no-store' });
       const data = await res.json();
       if (data.ok) {
         focusComputerEl.textContent = `Computer idle: ${data.idle_percent}%`;
