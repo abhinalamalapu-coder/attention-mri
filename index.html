@@ -90,7 +90,9 @@
   #focusOverlay.active { display: flex; }
   #focusOverlay video { display: block; width: 220px; border-radius: 12px; margin-bottom: 24px; }
   #focusTimer { font-size: 2.5em; font-weight: 700; margin-bottom: 8px; }
-  #focusPresence { font-size: 1.1em; color: #aaa; margin-bottom: 16px; }
+  #focusPresence { font-size: 1.1em; color: #aaa; margin-bottom: 6px; }
+  #focusComputer { font-size: 1.1em; color: #aaa; margin-bottom: 16px; }
+  #computerSetup { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #333; background: #2c2c2e; color: #eee; margin-bottom: 8px; font-size: 0.85em; }
   #focusDebug { font-size: 0.75em; color: #666; margin-bottom: 30px; text-align: center; max-width: 320px; }
   #focusStopBtn { width: 200px; background: #ff453a; color: #fff; }
 </style>
@@ -102,6 +104,12 @@
 <div class="card">
   <button id="sessionBtn" disabled>Loading face detection...</button>
   <div id="status">Camera only runs during an active session. No video is ever recorded or saved - only a presence percentage.</div>
+</div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Computer Connection (optional)</h3>
+  <input id="computerSetup" placeholder="e.g. 192.168.1.167:5000" value="">
+  <div style="font-size:0.8em; color:#888;">Enter your computer's IP and port from local_server.py. Both devices must be on the same WiFi.</div>
 </div>
 
 <div class="card" id="summaryCard">
@@ -127,7 +135,8 @@
 <div id="focusOverlay">
   <video id="focusPreview" autoplay playsinline muted></video>
   <div id="focusTimer">0:00</div>
-  <div id="focusPresence">Presence: --</div>
+  <div id="focusPresence">Face presence: --</div>
+  <div id="focusComputer">Computer idle: --</div>
   <div id="focusDebug">starting up...</div>
   <button id="focusStopBtn">Stop Session</button>
 </div>
@@ -143,8 +152,37 @@
   const focusOverlay = document.getElementById('focusOverlay');
   const focusTimerEl = document.getElementById('focusTimer');
   const focusPresenceEl = document.getElementById('focusPresence');
+  const focusComputerEl = document.getElementById('focusComputer');
   const focusDebugEl = document.getElementById('focusDebug');
   const focusStopBtn = document.getElementById('focusStopBtn');
+  const computerSetupInput = document.getElementById('computerSetup');
+
+  let computerCheckInterval = null;
+
+  // remember the computer address between visits
+  computerSetupInput.value = localStorage.getItem('attentionMriComputerAddr') || '';
+  computerSetupInput.addEventListener('change', () => {
+    localStorage.setItem('attentionMriComputerAddr', computerSetupInput.value.trim());
+  });
+
+  async function checkComputer() {
+    const addr = computerSetupInput.value.trim();
+    if (!addr) {
+      focusComputerEl.textContent = 'Computer idle: not connected';
+      return;
+    }
+    try {
+      const res = await fetch(`http://${addr}/status`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data.ok) {
+        focusComputerEl.textContent = `Computer idle: ${data.idle_percent}%`;
+      } else {
+        focusComputerEl.textContent = 'Computer idle: no recent data';
+      }
+    } catch (err) {
+      focusComputerEl.textContent = 'Computer idle: connection failed';
+    }
+  }
 
   let stream = null;
   let sessionActive = false;
@@ -210,6 +248,8 @@
     }, 1000);
 
     detectionInterval = setInterval(checkFace, CHECK_INTERVAL_MS);
+    computerCheckInterval = setInterval(checkComputer, 5000);
+    checkComputer();
   }
 
   async function checkFace() {
@@ -248,6 +288,7 @@
     sessionActive = false;
     clearInterval(timerInterval);
     clearInterval(detectionInterval);
+    clearInterval(computerCheckInterval);
 
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
