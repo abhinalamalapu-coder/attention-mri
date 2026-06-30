@@ -90,7 +90,8 @@
   #focusOverlay.active { display: flex; }
   #focusOverlay video { display: block; width: 220px; border-radius: 12px; margin-bottom: 24px; }
   #focusTimer { font-size: 2.5em; font-weight: 700; margin-bottom: 8px; }
-  #focusPresence { font-size: 1.1em; color: #aaa; margin-bottom: 30px; }
+  #focusPresence { font-size: 1.1em; color: #aaa; margin-bottom: 16px; }
+  #focusDebug { font-size: 0.75em; color: #666; margin-bottom: 30px; text-align: center; max-width: 320px; }
   #focusStopBtn { width: 200px; background: #ff453a; color: #fff; }
 </style>
 </head>
@@ -127,6 +128,7 @@
   <video id="focusPreview" autoplay playsinline muted></video>
   <div id="focusTimer">0:00</div>
   <div id="focusPresence">Presence: --</div>
+  <div id="focusDebug">starting up...</div>
   <button id="focusStopBtn">Stop Session</button>
 </div>
 
@@ -141,6 +143,7 @@
   const focusOverlay = document.getElementById('focusOverlay');
   const focusTimerEl = document.getElementById('focusTimer');
   const focusPresenceEl = document.getElementById('focusPresence');
+  const focusDebugEl = document.getElementById('focusDebug');
   const focusStopBtn = document.getElementById('focusStopBtn');
 
   let stream = null;
@@ -210,20 +213,34 @@
   }
 
   async function checkFace() {
-    if (!sessionActive || video.videoWidth === 0 || !modelsLoaded) return;
+    if (!sessionActive) return;
+
+    if (!modelsLoaded) {
+      focusDebugEl.textContent = 'Model not loaded yet.';
+      return;
+    }
+    if (video.videoWidth === 0) {
+      focusDebugEl.textContent = 'Waiting for camera frames... (video size: ' + video.videoWidth + 'x' + video.videoHeight + ')';
+      return;
+    }
 
     try {
       const detection = await faceapi.detectSingleFace(
         video,
-        new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 })
+        new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.2 })
       );
       totalFrames++;
-      if (detection) activeFrames++;
+      if (detection) {
+        activeFrames++;
+        focusDebugEl.textContent = `Video ${video.videoWidth}x${video.videoHeight} | Face detected (score ${detection.score.toFixed(2)})`;
+      } else {
+        focusDebugEl.textContent = `Video ${video.videoWidth}x${video.videoHeight} | No face found this check`;
+      }
 
       const pct = totalFrames > 0 ? Math.round((activeFrames / totalFrames) * 100) : 0;
       focusPresenceEl.textContent = `Presence: ${pct}%`;
     } catch (err) {
-      // detection hiccup on a single frame - skip it, not fatal
+      focusDebugEl.textContent = 'ERROR: ' + err.message;
     }
   }
 
