@@ -2,431 +2,658 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Attention MRI - Focus Session</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Attention MRI</title>
 <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
 <style>
-  * { box-sizing: border-box; }
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c28;
+    --border: #ffffff12;
+    --text: #f0f0f5;
+    --muted: #8888a0;
+    --green: #30d158;
+    --yellow: #ffd60a;
+    --orange: #ff9f0a;
+    --red: #ff453a;
+    --blue: #0a84ff;
+    --radius: 18px;
+    --radius-sm: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
   body {
     font-family: -apple-system, system-ui, sans-serif;
-    background: #111;
-    color: #eee;
-    margin: 0;
-    padding: 16px;
-    max-width: 480px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  h1 { font-size: 1.3em; text-align: center; }
-  .card {
-    background: #1c1c1e;
-    border-radius: 14px;
-    padding: 16px;
-    margin-bottom: 16px;
-  }
-  video { display: none; }
-  canvas { display: none; }
-  #preview {
-    width: 100%;
-    border-radius: 10px;
-    background: #000;
-    display: block;
-    margin-bottom: 10px;
-  }
-  button {
-    width: 100%;
-    padding: 14px;
-    border-radius: 10px;
-    border: none;
-    font-size: 1em;
-    font-weight: 600;
-    margin-top: 8px;
-  }
-  button:disabled { opacity: 0.5; }
-  #sessionBtn { background: #30d158; color: #000; }
-  #sessionBtn.active { background: #ff453a; color: #fff; }
-  #status { text-align: center; margin-top: 10px; font-size: 0.95em; color: #aaa; }
-  .stat-row { display: flex; justify-content: space-between; margin-top: 8px; }
-  .stat-row span:first-child { color: #aaa; }
-  #taskInput {
-    width: 100%;
-    padding: 10px;
-    border-radius: 8px;
-    border: 1px solid #333;
-    background: #2c2c2e;
-    color: #eee;
-    margin-bottom: 8px;
-  }
-  .task {
-    display: flex;
-    align-items: center;
-    padding: 8px 0;
-    border-bottom: 1px solid #2c2c2e;
-  }
-  .task input { margin-right: 10px; transform: scale(1.3); }
-  .task.done span { text-decoration: line-through; color: #777; }
-  .task button {
-    width: auto;
-    margin-left: auto;
-    background: none;
-    color: #ff453a;
-    padding: 4px 8px;
-    font-weight: 400;
+    background: var(--bg);
+    color: var(--text);
+    max-width: 430px;
+    margin: 0 auto;
+    padding: 0 0 100px;
+    overflow-x: hidden;
   }
 
-  /* Focus mode: page-level dimming only - this cannot control your phone's
-     actual hardware brightness, only how this page itself looks */
-  #focusOverlay {
-    display: none;
+  /* ---- NAV BAR ---- */
+  nav {
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.93);
-    z-index: 999;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
+    bottom: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 100%; max-width: 430px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav button {
+    flex: 1; border: none; background: none;
+    color: var(--muted); padding: 12px 0 8px;
+    font-size: 0.65em; font-weight: 500;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    cursor: pointer; transition: color 0.2s;
+  }
+  nav button.active { color: var(--blue); }
+  nav button svg { width: 22px; height: 22px; stroke-width: 1.8; fill: none; stroke: currentColor; }
+
+  /* ---- PAGES ---- */
+  .page { display: none; padding: 20px 16px 16px; animation: fadein 0.2s ease; }
+  .page.active { display: block; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* ---- TYPOGRAPHY ---- */
+  .page-title { font-size: 1.5em; font-weight: 700; margin-bottom: 4px; }
+  .page-sub { font-size: 0.85em; color: var(--muted); margin-bottom: 20px; }
+  .section-label { font-size: 0.7em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 20px 0 8px; }
+
+  /* ---- CARDS ---- */
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .card-title { font-size: 0.8em; font-weight: 600; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+  /* ---- BUTTONS ---- */
+  .btn {
+    width: 100%; padding: 15px;
+    border-radius: var(--radius-sm);
+    border: none; font-size: 1em; font-weight: 600;
+    cursor: pointer; transition: opacity 0.15s, transform 0.1s;
+    letter-spacing: 0.01em;
+  }
+  .btn:active { opacity: 0.8; transform: scale(0.98); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-green { background: var(--green); color: #000; }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-surface { background: var(--surface2); color: var(--text); }
+
+  /* ---- HOME: SESSION RING ---- */
+  #homeStatus { font-size: 0.85em; color: var(--muted); margin-bottom: 20px; }
+  .ring-wrap {
+    display: flex; justify-content: center; align-items: center;
+    margin: 24px 0 28px;
+    position: relative;
+  }
+  .ring-wrap svg { width: 180px; height: 180px; transform: rotate(-90deg); }
+  .ring-bg { fill: none; stroke: var(--surface2); stroke-width: 10; }
+  .ring-fill {
+    fill: none; stroke: var(--green); stroke-width: 10;
+    stroke-linecap: round;
+    stroke-dasharray: 502;
+    stroke-dashoffset: 502;
+    transition: stroke-dashoffset 0.8s ease, stroke 0.5s ease;
+  }
+  .ring-center {
+    position: absolute;
+    display: flex; flex-direction: column; align-items: center;
+    pointer-events: none;
+  }
+  #ringPct { font-size: 2.2em; font-weight: 700; }
+  #ringLabel { font-size: 0.75em; color: var(--muted); margin-top: 2px; }
+  .state-badge {
+    text-align: center; padding: 8px 20px;
+    border-radius: 999px; font-size: 0.9em; font-weight: 600;
+    background: var(--surface2); color: var(--muted);
+    margin-bottom: 24px; display: inline-block;
+    width: 100%;
+  }
+  .state-badge.deep { background: #30d15820; color: var(--green); }
+  .state-badge.stable { background: #ffd60a20; color: var(--yellow); }
+  .state-badge.fragmented { background: #ff9f0a20; color: var(--orange); }
+  .state-badge.fatigued { background: #ff453a20; color: var(--red); }
+
+  /* ---- STAT ROWS ---- */
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .label { font-size: 0.9em; color: var(--muted); }
+  .stat-row .value { font-size: 0.9em; font-weight: 600; }
+
+  /* ---- INPUTS ---- */
+  .input {
+    width: 100%; padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text); font-size: 0.95em;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .input:focus { border-color: var(--blue); }
+  .input-hint { font-size: 0.75em; color: var(--muted); margin-top: 6px; }
+
+  /* ---- TASKS ---- */
+  .task-row {
+    display: flex; align-items: center;
+    padding: 11px 0; border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+  .task-row:last-child { border-bottom: none; }
+  .task-check {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 2px solid var(--border); background: none;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; cursor: pointer; transition: background 0.2s, border-color 0.2s;
+  }
+  .task-check.done { background: var(--green); border-color: var(--green); }
+  .task-check.done::after { content: '✓'; color: #000; font-size: 0.75em; font-weight: 700; }
+  .task-text { flex: 1; font-size: 0.9em; }
+  .task-text.done { text-decoration: line-through; color: var(--muted); }
+  .task-del { background: none; border: none; color: var(--muted); font-size: 1.1em; cursor: pointer; padding: 4px; width: auto; }
+  .task-add-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .task-add-row .input { flex: 1; }
+  .task-add-btn { padding: 12px 16px; border-radius: var(--radius-sm); border: none; background: var(--blue); color: #fff; font-weight: 600; font-size: 0.9em; cursor: pointer; white-space: nowrap; }
+
+  /* ---- HISTORY ITEMS ---- */
+  .history-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .history-item:last-child { border-bottom: none; }
+  .history-left .h-date { font-size: 0.75em; color: var(--muted); }
+  .history-left .h-duration { font-size: 0.95em; font-weight: 600; margin-top: 1px; }
+  .history-right { text-align: right; }
+  .history-right .h-presence { font-size: 0.85em; font-weight: 600; }
+  .history-right .h-rating { font-size: 0.75em; color: var(--muted); margin-top: 1px; }
+
+  /* ---- WEEKLY CHART ---- */
+  .week-bars { display: flex; gap: 6px; align-items: flex-end; height: 80px; margin-top: 12px; }
+  .week-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .week-bar { width: 100%; border-radius: 4px 4px 0 0; background: var(--surface2); min-height: 4px; }
+  .week-bar.filled { background: var(--blue); }
+  .week-day-label { font-size: 0.6em; color: var(--muted); }
+
+  /* ---- FOCUS OVERLAY ---- */
+  #focusOverlay {
+    display: none; position: fixed;
+    inset: 0; background: #000;
+    z-index: 200; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px 24px;
   }
   #focusOverlay.active { display: flex; }
-  #focusOverlay video { display: block; width: 220px; border-radius: 12px; margin-bottom: 24px; }
-  #focusTimer { font-size: 2.5em; font-weight: 700; margin-bottom: 8px; }
-  #focusPresence { font-size: 1.1em; color: #aaa; margin-bottom: 6px; }
-  #focusComputer { font-size: 1.1em; color: #aaa; margin-bottom: 16px; }
-  #computerSetup { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #333; background: #2c2c2e; color: #eee; margin-bottom: 8px; font-size: 0.85em; }
-  #focusDebug { font-size: 0.75em; color: #666; margin-bottom: 30px; text-align: center; max-width: 320px; }
-  #focusStopBtn { width: 200px; background: #ff453a; color: #fff; }
+  #focusVideoWrap {
+    position: relative; width: 200px; height: 200px;
+    border-radius: 50%; overflow: hidden; margin-bottom: 32px;
+    border: 3px solid var(--surface2);
+    transition: border-color 0.6s, box-shadow 0.6s;
+  }
+  #focusVideoWrap.present { border-color: var(--green); box-shadow: 0 0 30px #30d15840; }
+  #focusVideoWrap.absent { border-color: var(--surface2); box-shadow: none; }
+  #focusPreview { width: 100%; height: 100%; object-fit: cover; display: block; transform: scaleX(-1); }
+  #focusStateLabel {
+    font-size: 1.6em; font-weight: 700; text-align: center; margin-bottom: 8px;
+    transition: color 0.5s;
+  }
+  #focusTimer { font-size: 3em; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 20px; font-variant-numeric: tabular-nums; }
+  #focusMetaRow { display: flex; gap: 32px; margin-bottom: 40px; }
+  .focus-meta { text-align: center; }
+  .focus-meta .fm-val { font-size: 1.1em; font-weight: 600; }
+  .focus-meta .fm-lbl { font-size: 0.7em; color: var(--muted); margin-top: 2px; }
+  #focusDebug { font-size: 0.65em; color: #444; text-align: center; margin-bottom: 20px; max-width: 300px; }
+  #focusStopBtn { width: 200px; padding: 14px; border-radius: 999px; border: 2px solid var(--red); background: none; color: var(--red); font-size: 1em; font-weight: 600; cursor: pointer; }
+
+  /* ---- POST-SESSION RATING ---- */
+  #ratingOverlay {
+    display: none; position: fixed;
+    inset: 0; background: rgba(0,0,0,0.95);
+    z-index: 300; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 32px;
+  }
+  #ratingOverlay.active { display: flex; }
+  #ratingOverlay h2 { font-size: 1.3em; font-weight: 700; text-align: center; margin-bottom: 8px; }
+  #ratingOverlay p { font-size: 0.85em; color: var(--muted); text-align: center; margin-bottom: 32px; line-height: 1.5; }
+  .rating-stars { display: flex; gap: 12px; margin-bottom: 32px; }
+  .rating-star {
+    width: 52px; height: 52px; border-radius: 14px;
+    background: var(--surface2); border: 2px solid var(--border);
+    font-size: 1.2em; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    color: var(--text);
+  }
+  .rating-star:active { transform: scale(0.92); }
+  .rating-star.selected { background: var(--blue); border-color: var(--blue); color: #fff; }
+  #ratingSkip { background: none; border: none; color: var(--muted); font-size: 0.85em; cursor: pointer; padding: 8px; width: auto; }
+
+  /* ---- SETTINGS ---- */
+  .settings-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-row .s-label { font-size: 0.9em; }
+  .settings-row .s-sub { font-size: 0.75em; color: var(--muted); margin-top: 2px; }
+  .dot-badge { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; margin-left: 6px; }
+  .dot-badge.off { background: var(--muted); }
+
+  #videoHidden { display: none; }
 </style>
 </head>
 <body>
 
-<h1>Attention MRI</h1>
+<video id="videoHidden" autoplay playsinline muted></video>
 
-<div class="card">
-  <button id="sessionBtn" disabled>Loading face detection...</button>
-  <div id="status">Camera only runs during an active session. No video is ever recorded or saved - only a presence percentage.</div>
+<!-- HOME -->
+<div class="page active" id="page-home">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+    <div class="page-title">Attention MRI</div>
+    <div id="connectionDot" class="dot-badge off"></div>
+  </div>
+  <div class="page-sub" id="homeStatus">Loading face detection model…</div>
+
+  <div class="ring-wrap">
+    <svg viewBox="0 0 180 180">
+      <circle class="ring-bg" cx="90" cy="90" r="80"/>
+      <circle class="ring-fill" id="ringFill" cx="90" cy="90" r="80"/>
+    </svg>
+    <div class="ring-center">
+      <div id="ringPct">--</div>
+      <div id="ringLabel">presence</div>
+    </div>
+  </div>
+
+  <div class="state-badge" id="stateBadge">Ready to focus</div>
+  <button class="btn btn-green" id="sessionBtn" disabled>Start Focus Session</button>
+
+  <div class="section-label">Today</div>
+  <div class="card">
+    <div class="stat-row"><span class="label">Sessions</span><span class="value" id="sumSessions">0</span></div>
+    <div class="stat-row"><span class="label">Focus time</span><span class="value" id="sumTime">0:00</span></div>
+    <div class="stat-row"><span class="label">Avg presence</span><span class="value" id="sumPresence">--</span></div>
+    <div class="stat-row"><span class="label">Avg computer idle</span><span class="value" id="sumComputerIdle">--</span></div>
+  </div>
 </div>
 
-<div class="card">
-  <h3 style="margin-top:0;">Computer Connection (optional)</h3>
-  <input id="computerSetup" placeholder="e.g. https://abc123.ngrok-free.app" value="">
-  <div style="font-size:0.8em; color:#888;">Paste the HTTPS link from ngrok (run "ngrok http 5000" on your computer). A plain IP address will likely be blocked by Safari's security settings.</div>
+<!-- GOALS -->
+<div class="page" id="page-tasks">
+  <div class="page-title">Goals</div>
+  <div class="page-sub">Today's focus targets</div>
+  <div class="task-add-row">
+    <input class="input" id="taskInput" placeholder="Add a goal…">
+    <button class="task-add-btn" id="addTaskBtn">Add</button>
+  </div>
+  <div class="card">
+    <div id="taskList"></div>
+    <div class="stat-row" style="margin-top:4px;">
+      <span class="label">Completed</span>
+      <span class="value" id="taskProgress">0 / 0</span>
+    </div>
+  </div>
 </div>
 
-<div class="card" id="summaryCard">
-  <h3 style="margin-top:0;">Today's Summary</h3>
-  <div class="stat-row"><span>Sessions</span><span id="sumSessions">0</span></div>
-  <div class="stat-row"><span>Total focus time</span><span id="sumTime">0:00</span></div>
-  <div class="stat-row"><span>Average presence</span><span id="sumPresence">--</span></div>
+<!-- HISTORY -->
+<div class="page" id="page-history">
+  <div class="page-title">History</div>
+  <div class="page-sub">Past sessions and trends</div>
+  <div class="section-label">This week</div>
+  <div class="card">
+    <div class="card-title">Daily focus time (minutes)</div>
+    <div class="week-bars" id="weekBars"></div>
+  </div>
+  <div class="section-label">Recent sessions</div>
+  <div class="card" id="sessionHistory"></div>
 </div>
 
-<div class="card">
-  <h3 style="margin-top:0;">Today's Goals</h3>
-  <input id="taskInput" placeholder="Add a goal...">
-  <button id="addTaskBtn" style="background:#2c2c2e;color:#eee;">Add</button>
-  <div id="taskList"></div>
-  <div class="stat-row"><span>Completed today</span><span id="taskProgress">0 / 0</span></div>
+<!-- SETTINGS -->
+<div class="page" id="page-settings">
+  <div class="page-title">Settings</div>
+  <div class="page-sub">Computer connection & privacy</div>
+
+  <div class="section-label">Computer connection</div>
+  <div class="card">
+    <div class="card-title">Tunnel URL</div>
+    <input class="input" id="computerSetup" placeholder="https://your-tunnel.trycloudflare.com">
+    <div class="input-hint" style="margin-top:8px;">Run cloudflared-windows-amd64.exe tunnel --url http://localhost:5000 on your computer, paste the URL here.</div>
+    <div class="stat-row" style="margin-top:8px;">
+      <span class="label">Status</span>
+      <span class="value" id="connStatus" style="color:var(--muted)">Not tested</span>
+    </div>
+    <button class="btn btn-surface" id="testConnBtn" style="margin-top:12px;">Test Connection</button>
+  </div>
+
+  <div class="section-label">Privacy</div>
+  <div class="card">
+    <div class="settings-row">
+      <div><div class="s-label">Camera recording</div><div class="s-sub">Video never stored or transmitted</div></div>
+      <span style="color:var(--green);font-size:0.8em;font-weight:600;">OFF</span>
+    </div>
+    <div class="settings-row">
+      <div><div class="s-label">Keystroke content</div><div class="s-sub">Only count logged, never content</div></div>
+      <span style="color:var(--green);font-size:0.8em;font-weight:600;">OFF</span>
+    </div>
+    <div class="settings-row">
+      <div><div class="s-label">Data storage</div><div class="s-sub">Local device only</div></div>
+      <span style="color:var(--green);font-size:0.8em;font-weight:600;">ON DEVICE</span>
+    </div>
+  </div>
 </div>
 
-<!-- Hidden elements used for camera capture, not shown to the user -->
-<video id="video" autoplay playsinline muted></video>
-<canvas id="canvas"></canvas>
-
-<!-- Full-screen focus mode shown only during an active session -->
+<!-- FOCUS OVERLAY -->
 <div id="focusOverlay">
-  <video id="focusPreview" autoplay playsinline muted></video>
+  <div id="focusVideoWrap" class="absent">
+    <video id="focusPreview" autoplay playsinline muted></video>
+  </div>
+  <div id="focusStateLabel" style="color:var(--muted)">Detecting…</div>
   <div id="focusTimer">0:00</div>
-  <div id="focusPresence">Face presence: --</div>
-  <div id="focusComputer">Computer idle: --</div>
-  <div id="focusDebug">starting up...</div>
-  <button id="focusStopBtn">Stop Session</button>
+  <div id="focusMetaRow">
+    <div class="focus-meta"><div class="fm-val" id="fmPresence">--</div><div class="fm-lbl">Face presence</div></div>
+    <div class="focus-meta"><div class="fm-val" id="fmIdle">--</div><div class="fm-lbl">Computer idle</div></div>
+  </div>
+  <div id="focusDebug"></div>
+  <button id="focusStopBtn">End Session</button>
 </div>
+
+<!-- RATING OVERLAY -->
+<div id="ratingOverlay">
+  <h2>How focused were you?</h2>
+  <p>This validates whether the behavioral signals actually track your real experience — the core of the research.</p>
+  <div class="rating-stars" id="ratingStars">
+    <div class="rating-star" data-val="1">1</div>
+    <div class="rating-star" data-val="2">2</div>
+    <div class="rating-star" data-val="3">3</div>
+    <div class="rating-star" data-val="4">4</div>
+    <div class="rating-star" data-val="5">5</div>
+  </div>
+  <button id="ratingSkip">Skip</button>
+</div>
+
+<!-- NAV -->
+<nav>
+  <button class="active" data-page="home">
+    <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    Home
+  </button>
+  <button data-page="tasks">
+    <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+    Goals
+  </button>
+  <button data-page="history">
+    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    History
+  </button>
+  <button data-page="settings">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    Settings
+  </button>
+</nav>
 
 <script>
-  const video = document.getElementById('video');
-  const focusPreview = document.getElementById('focusPreview');
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
-
-  const sessionBtn = document.getElementById('sessionBtn');
-  const statusEl = document.getElementById('status');
-  const focusOverlay = document.getElementById('focusOverlay');
-  const focusTimerEl = document.getElementById('focusTimer');
-  const focusPresenceEl = document.getElementById('focusPresence');
-  const focusComputerEl = document.getElementById('focusComputer');
-  const focusDebugEl = document.getElementById('focusDebug');
-  const focusStopBtn = document.getElementById('focusStopBtn');
-  const computerSetupInput = document.getElementById('computerSetup');
-
-  let computerCheckInterval = null;
-
-  // remember the computer address between visits
-  computerSetupInput.value = localStorage.getItem('attentionMriComputerAddr') || '';
-  computerSetupInput.addEventListener('change', () => {
-    localStorage.setItem('attentionMriComputerAddr', computerSetupInput.value.trim());
+  // NAV
+  document.querySelectorAll('nav button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('page-' + btn.dataset.page).classList.add('active');
+      if (btn.dataset.page === 'history') renderHistory();
+    });
   });
 
-  async function checkComputer() {
-    let addr = computerSetupInput.value.trim();
-    if (!addr) {
-      focusComputerEl.textContent = 'Computer idle: not connected';
-      return;
+  // STORAGE
+  function loadHistory() { try { return JSON.parse(localStorage.getItem('amri_history') || '{}'); } catch { return {}; } }
+  function saveHistory(h) { localStorage.setItem('amri_history', JSON.stringify(h)); }
+  function todayKey() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+  function getToday(h) { const k = todayKey(); if (!h[k]) h[k] = { sessions: [], tasks: [] }; return h[k]; }
+
+  // STATE CLASSIFICATION — idle is validated; presence is shown but not yet validated
+  function classifyState(presencePct, idlePct) {
+    if (idlePct !== null) {
+      if (idlePct <= 15) return 'deep';
+      if (idlePct <= 35) return 'stable';
+      if (idlePct <= 60) return 'fragmented';
+      return 'fatigued';
     }
-    // accept either a full URL (https://...) or a bare IP:port
-    const base = addr.startsWith('http') ? addr.replace(/\/$/, '') : `http://${addr}`;
+    if (presencePct === null) return null;
+    if (presencePct >= 80) return 'deep';
+    if (presencePct >= 60) return 'stable';
+    if (presencePct >= 35) return 'fragmented';
+    return 'fatigued';
+  }
+  const STATE = {
+    deep:       { label: 'Deep Focus',          color: 'var(--green)',  cls: 'deep' },
+    stable:     { label: 'Stable Attention',     color: 'var(--yellow)', cls: 'stable' },
+    fragmented: { label: 'Fragmented Attention', color: 'var(--orange)', cls: 'fragmented' },
+    fatigued:   { label: 'Cognitive Fatigue',    color: 'var(--red)',    cls: 'fatigued' },
+  };
+
+  // RING
+  const ringFill = document.getElementById('ringFill');
+  const CIRC = 2 * Math.PI * 80;
+  function setRing(pct, color) {
+    ringFill.style.strokeDashoffset = CIRC * (1 - pct / 100);
+    ringFill.style.stroke = color || 'var(--green)';
+  }
+
+  // COMPUTER CONNECTION
+  const computerSetupInput = document.getElementById('computerSetup');
+  computerSetupInput.value = localStorage.getItem('amri_addr') || '';
+  computerSetupInput.addEventListener('change', () => localStorage.setItem('amri_addr', computerSetupInput.value.trim()));
+
+  let lastIdle = null;
+
+  async function fetchComputer() {
+    const addr = computerSetupInput.value.trim();
+    if (!addr) return null;
+    const base = addr.startsWith('http') ? addr.replace(/\/$/, '') : `https://${addr}`;
     try {
-      const res = await fetch(`${base}/status`, { cache: 'no-store' });
+      const res = await fetch(`${base}/status`, { cache: 'no-store', signal: AbortSignal.timeout(4000) });
       const data = await res.json();
       if (data.ok) {
-        focusComputerEl.textContent = `Computer idle: ${data.idle_percent}%`;
-      } else {
-        focusComputerEl.textContent = 'Computer idle: no recent data';
+        lastIdle = data.idle_percent;
+        document.getElementById('connectionDot').className = 'dot-badge';
+        return data;
       }
-    } catch (err) {
-      focusComputerEl.textContent = 'Computer idle: connection failed';
-    }
+    } catch {}
+    lastIdle = null;
+    document.getElementById('connectionDot').className = 'dot-badge off';
+    return null;
   }
 
-  let stream = null;
-  let sessionActive = false;
-  let sessionStart = null;
-  let timerInterval = null;
-  let detectionInterval = null;
-  let activeFrames = 0;
-  let totalFrames = 0;
-  let modelsLoaded = false;
+  document.getElementById('testConnBtn').addEventListener('click', async () => {
+    const el = document.getElementById('connStatus');
+    el.textContent = 'Testing…'; el.style.color = 'var(--muted)';
+    const data = await fetchComputer();
+    if (data) { el.textContent = `Connected · idle ${data.idle_percent}%`; el.style.color = 'var(--green)'; }
+    else { el.textContent = 'Failed — check URL and tunnel'; el.style.color = 'var(--red)'; }
+  });
 
+  // FACE DETECTION
+  const videoHidden = document.getElementById('videoHidden');
+  const focusPreview = document.getElementById('focusPreview');
   const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
-  const CHECK_INTERVAL_MS = 1500;
+  let modelsLoaded = false, stream = null, sessionActive = false;
+  let sessionStart = null, timerInterval = null, detectionInterval = null, computerInterval = null;
+  let activeFrames = 0, totalFrames = 0, pendingSession = null;
 
-  function formatTime(seconds) {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  }
+  function formatTime(s) { return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
 
   window.addEventListener('load', async () => {
-    // wait for the deferred face-api.js script to finish loading
-    const waitForFaceApi = () => new Promise(resolve => {
-      const check = () => (window.faceapi ? resolve() : setTimeout(check, 100));
-      check();
-    });
-    await waitForFaceApi();
-
+    const wait = () => new Promise(r => { const c = () => window.faceapi ? r() : setTimeout(c, 100); c(); });
+    await wait();
     try {
       await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
       modelsLoaded = true;
-      sessionBtn.disabled = false;
-      sessionBtn.textContent = 'Start Focus Session';
-    } catch (err) {
-      statusEl.textContent = 'Could not load face detection model. Check your internet connection and reload.';
+      document.getElementById('sessionBtn').disabled = false;
+      document.getElementById('homeStatus').textContent = 'Tap to begin a focus session';
+    } catch {
+      document.getElementById('homeStatus').textContent = 'Face model failed to load — check connection.';
     }
-
-    renderTasks();
-    renderSummary();
+    renderSummary(); renderTasks();
   });
 
   async function startSession() {
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-    } catch (err) {
-      statusEl.textContent = 'Camera access denied or unavailable.';
-      return;
-    }
-    video.srcObject = stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } }); }
+    catch { document.getElementById('homeStatus').textContent = 'Camera access denied.'; return; }
+    videoHidden.srcObject = stream;
     focusPreview.srcObject = stream;
-
-    sessionActive = true;
-    sessionStart = Date.now();
-    activeFrames = 0;
-    totalFrames = 0;
-
-    focusOverlay.classList.add('active');
-    focusTimerEl.textContent = '0:00';
-    focusPresenceEl.textContent = 'Presence: --';
-
+    sessionActive = true; sessionStart = Date.now();
+    activeFrames = 0; totalFrames = 0; lastIdle = null;
+    document.getElementById('focusOverlay').classList.add('active');
+    document.getElementById('focusTimer').textContent = '0:00';
+    document.getElementById('focusStateLabel').textContent = 'Detecting…';
+    document.getElementById('focusStateLabel').style.color = 'var(--muted)';
+    document.getElementById('fmPresence').textContent = '--';
+    document.getElementById('fmIdle').textContent = '--';
+    document.getElementById('focusDebug').textContent = '';
     timerInterval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - sessionStart) / 1000);
-      focusTimerEl.textContent = formatTime(elapsed);
+      document.getElementById('focusTimer').textContent = formatTime(Math.floor((Date.now()-sessionStart)/1000));
     }, 1000);
-
-    detectionInterval = setInterval(checkFace, CHECK_INTERVAL_MS);
-    computerCheckInterval = setInterval(checkComputer, 5000);
-    checkComputer();
+    detectionInterval = setInterval(runDetection, 1500);
+    computerInterval = setInterval(async () => {
+      const d = await fetchComputer();
+      if (d) document.getElementById('fmIdle').textContent = d.idle_percent + '%';
+    }, 5000);
+    fetchComputer().then(d => { if (d) document.getElementById('fmIdle').textContent = d.idle_percent + '%'; });
   }
 
-  async function checkFace() {
-    if (!sessionActive) return;
-
-    if (!modelsLoaded) {
-      focusDebugEl.textContent = 'Model not loaded yet.';
-      return;
-    }
-    if (video.videoWidth === 0) {
-      focusDebugEl.textContent = 'Waiting for camera frames... (video size: ' + video.videoWidth + 'x' + video.videoHeight + ')';
-      return;
-    }
-
+  async function runDetection() {
+    if (!sessionActive || !modelsLoaded || videoHidden.videoWidth === 0) return;
     try {
-      const detection = await faceapi.detectSingleFace(
-        video,
-        new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.2 })
-      );
+      const det = await faceapi.detectSingleFace(videoHidden, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.2 }));
       totalFrames++;
-      if (detection) {
-        activeFrames++;
-        focusDebugEl.textContent = `Video ${video.videoWidth}x${video.videoHeight} | Face detected (score ${detection.score.toFixed(2)})`;
-      } else {
-        focusDebugEl.textContent = `Video ${video.videoWidth}x${video.videoHeight} | No face found this check`;
+      if (det) activeFrames++;
+      const pct = Math.round((activeFrames / totalFrames) * 100);
+      document.getElementById('fmPresence').textContent = pct + '%';
+      document.getElementById('focusVideoWrap').className = det ? 'present' : 'absent';
+      document.getElementById('focusDebug').textContent = det ? `Face detected · score ${det.score.toFixed(2)}` : 'No face detected this check';
+      // update ring and state
+      setRing(pct, det ? 'var(--green)' : 'var(--red)');
+      document.getElementById('ringPct').textContent = pct + '%';
+      const state = classifyState(pct, lastIdle);
+      if (state) {
+        const cfg = STATE[state];
+        document.getElementById('focusStateLabel').textContent = cfg.label;
+        document.getElementById('focusStateLabel').style.color = cfg.color;
       }
-
-      const pct = totalFrames > 0 ? Math.round((activeFrames / totalFrames) * 100) : 0;
-      focusPresenceEl.textContent = `Presence: ${pct}%`;
-    } catch (err) {
-      focusDebugEl.textContent = 'ERROR: ' + err.message;
-    }
+    } catch(e) { document.getElementById('focusDebug').textContent = 'Error: ' + e.message; }
   }
 
   function stopSession() {
     sessionActive = false;
-    clearInterval(timerInterval);
-    clearInterval(detectionInterval);
-    clearInterval(computerCheckInterval);
-
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      stream = null;
-    }
-
-    const elapsedSeconds = Math.floor((Date.now() - sessionStart) / 1000);
-    const presencePct = totalFrames > 0 ? Math.round((activeFrames / totalFrames) * 100) : null;
-
-    saveSessionToHistory(elapsedSeconds, presencePct);
-
-    focusOverlay.classList.remove('active');
-    renderSummary();
+    clearInterval(timerInterval); clearInterval(detectionInterval); clearInterval(computerInterval);
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    pendingSession = { secs: Math.floor((Date.now()-sessionStart)/1000), presencePct: totalFrames > 0 ? Math.round((activeFrames/totalFrames)*100) : null, computerIdle: lastIdle };
+    document.getElementById('focusOverlay').classList.remove('active');
+    document.getElementById('ratingOverlay').classList.add('active');
+    document.querySelectorAll('.rating-star').forEach(s => s.classList.remove('selected'));
   }
 
-  sessionBtn.addEventListener('click', startSession);
-  focusStopBtn.addEventListener('click', stopSession);
+  document.getElementById('sessionBtn').addEventListener('click', startSession);
+  document.getElementById('focusStopBtn').addEventListener('click', stopSession);
 
-  // ---------- Daily history (sessions + tasks), stored locally on this device only ----------
-
-  function todayKey() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }
-
-  function loadHistory() {
-    const raw = localStorage.getItem('attentionMriHistory');
-    return raw ? JSON.parse(raw) : {};
-  }
-
-  function saveHistory(history) {
-    localStorage.setItem('attentionMriHistory', JSON.stringify(history));
-  }
-
-  function getToday(history) {
-    const key = todayKey();
-    if (!history[key]) history[key] = { sessions: [], tasks: [] };
-    return history[key];
-  }
-
-  function saveSessionToHistory(seconds, presencePct) {
-    const history = loadHistory();
-    const today = getToday(history);
-    today.sessions.push({ seconds, presencePct, endedAt: new Date().toISOString() });
-    saveHistory(history);
-  }
-
-  function renderSummary() {
-    const history = loadHistory();
-    const today = getToday(history);
-    const sessions = today.sessions;
-
-    document.getElementById('sumSessions').textContent = sessions.length;
-
-    const totalSeconds = sessions.reduce((sum, s) => sum + s.seconds, 0);
-    document.getElementById('sumTime').textContent = formatTime(totalSeconds);
-
-    const withPresence = sessions.filter(s => s.presencePct !== null);
-    if (withPresence.length > 0) {
-      const avg = Math.round(withPresence.reduce((sum, s) => sum + s.presencePct, 0) / withPresence.length);
-      document.getElementById('sumPresence').textContent = avg + '%';
-    } else {
-      document.getElementById('sumPresence').textContent = '--';
-    }
-  }
-
-  // ---------- Tasks ----------
-
-  const taskInput = document.getElementById('taskInput');
-  const addTaskBtn = document.getElementById('addTaskBtn');
-  const taskListEl = document.getElementById('taskList');
-  const taskProgressEl = document.getElementById('taskProgress');
-
-  function getTodayTasks() {
-    const history = loadHistory();
-    return getToday(history).tasks;
-  }
-
-  function setTodayTasks(tasks) {
-    const history = loadHistory();
-    getToday(history).tasks = tasks;
-    saveHistory(history);
-  }
-
-  function renderTasks() {
-    const tasks = getTodayTasks();
-    taskListEl.innerHTML = '';
-
-    tasks.forEach((task, i) => {
-      const div = document.createElement('div');
-      div.className = 'task' + (task.done ? ' done' : '');
-
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.checked = task.done;
-      checkbox.addEventListener('change', () => {
-        tasks[i].done = checkbox.checked;
-        setTodayTasks(tasks);
-        renderTasks();
-      });
-
-      const span = document.createElement('span');
-      span.textContent = task.text;
-
-      const delBtn = document.createElement('button');
-      delBtn.textContent = '✕';
-      delBtn.addEventListener('click', () => {
-        tasks.splice(i, 1);
-        setTodayTasks(tasks);
-        renderTasks();
-      });
-
-      div.appendChild(checkbox);
-      div.appendChild(span);
-      div.appendChild(delBtn);
-      taskListEl.appendChild(div);
+  // RATING
+  document.querySelectorAll('.rating-star').forEach(star => {
+    star.addEventListener('click', () => {
+      const val = parseInt(star.dataset.val);
+      document.querySelectorAll('.rating-star').forEach(s => s.classList.toggle('selected', parseInt(s.dataset.val) <= val));
+      setTimeout(() => commitSession(val), 300);
     });
+  });
+  document.getElementById('ratingSkip').addEventListener('click', () => commitSession(null));
 
-    const completed = tasks.filter(t => t.done).length;
-    taskProgressEl.textContent = `${completed} / ${tasks.length}`;
+  function commitSession(rating) {
+    document.getElementById('ratingOverlay').classList.remove('active');
+    if (!pendingSession) return;
+    const h = loadHistory();
+    getToday(h).sessions.push({ ...pendingSession, focusRating: rating, endedAt: new Date().toISOString() });
+    saveHistory(h);
+    pendingSession = null;
+    renderSummary();
+    ringFill.style.strokeDashoffset = CIRC;
+    document.getElementById('ringPct').textContent = '--';
+    document.getElementById('stateBadge').textContent = 'Ready to focus';
+    document.getElementById('stateBadge').className = 'state-badge';
+    document.getElementById('homeStatus').textContent = 'Tap to begin a focus session';
   }
 
-  addTaskBtn.addEventListener('click', () => {
-    const text = taskInput.value.trim();
+  // SUMMARY
+  function renderSummary() {
+    const h = loadHistory(); const s = getToday(h).sessions;
+    document.getElementById('sumSessions').textContent = s.length;
+    document.getElementById('sumTime').textContent = formatTime(s.reduce((a,x) => a+x.secs, 0));
+    const wp = s.filter(x => x.presencePct !== null);
+    document.getElementById('sumPresence').textContent = wp.length ? Math.round(wp.reduce((a,x) => a+x.presencePct,0)/wp.length)+'%' : '--';
+    const wi = s.filter(x => x.computerIdle !== null);
+    document.getElementById('sumComputerIdle').textContent = wi.length ? Math.round(wi.reduce((a,x) => a+x.computerIdle,0)/wi.length)+'%' : '--';
+  }
+
+  // TASKS
+  function getTasks() { const h = loadHistory(); return getToday(h).tasks; }
+  function setTasks(t) { const h = loadHistory(); getToday(h).tasks = t; saveHistory(h); }
+  function renderTasks() {
+    const tasks = getTasks();
+    const list = document.getElementById('taskList');
+    list.innerHTML = '';
+    tasks.forEach((task, i) => {
+      const row = document.createElement('div'); row.className = 'task-row';
+      const chk = document.createElement('div'); chk.className = 'task-check' + (task.done ? ' done' : '');
+      chk.addEventListener('click', () => { tasks[i].done = !tasks[i].done; setTasks(tasks); renderTasks(); });
+      const txt = document.createElement('span'); txt.className = 'task-text' + (task.done ? ' done' : ''); txt.textContent = task.text;
+      const del = document.createElement('button'); del.className = 'task-del'; del.textContent = '✕';
+      del.addEventListener('click', () => { tasks.splice(i,1); setTasks(tasks); renderTasks(); });
+      row.appendChild(chk); row.appendChild(txt); row.appendChild(del);
+      list.appendChild(row);
+    });
+    const done = tasks.filter(t => t.done).length;
+    document.getElementById('taskProgress').textContent = `${done} / ${tasks.length}`;
+  }
+  document.getElementById('addTaskBtn').addEventListener('click', () => {
+    const text = document.getElementById('taskInput').value.trim();
     if (!text) return;
-    const tasks = getTodayTasks();
-    tasks.push({ text, done: false });
-    setTodayTasks(tasks);
-    taskInput.value = '';
-    renderTasks();
+    const t = getTasks(); t.push({ text, done: false }); setTasks(t);
+    document.getElementById('taskInput').value = ''; renderTasks();
   });
+  document.getElementById('taskInput').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('addTaskBtn').click(); });
 
-  taskInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') addTaskBtn.click();
-  });
+  // HISTORY
+  function renderHistory() {
+    const h = loadHistory();
+    const days = Object.keys(h).sort().slice(-7);
+    const bars = document.getElementById('weekBars');
+    bars.innerHTML = '';
+    const maxMins = Math.max(...days.map(d => Math.round(h[d].sessions.reduce((s,x) => s+x.secs,0)/60)), 1);
+    const dn = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+    days.forEach(day => {
+      const mins = Math.round(h[day].sessions.reduce((s,x) => s+x.secs,0)/60);
+      const hp = Math.max((mins/maxMins)*100, mins > 0 ? 5 : 0);
+      const d = new Date(day + 'T12:00:00');
+      const w = document.createElement('div'); w.className = 'week-bar-wrap';
+      w.innerHTML = `<div class="week-bar ${mins>0?'filled':''}" style="height:${hp}%"></div><div class="week-day-label">${dn[d.getDay()]}</div>`;
+      bars.appendChild(w);
+    });
+    const hist = document.getElementById('sessionHistory');
+    hist.innerHTML = '';
+    const all = [];
+    Object.keys(h).sort().reverse().slice(0,7).forEach(day => (h[day].sessions||[]).forEach(s => all.push({day,...s})));
+    all.slice(0,20).forEach(s => {
+      const item = document.createElement('div'); item.className = 'history-item';
+      const d = new Date(s.endedAt);
+      const ts = d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' · '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+      item.innerHTML = `<div class="history-left"><div class="h-date">${ts}</div><div class="h-duration">${formatTime(s.secs)}</div></div><div class="history-right"><div class="h-presence" style="color:var(--blue)">${s.presencePct!==null?s.presencePct+'% present':'--'}</div><div class="h-rating">${s.focusRating!=null?'Focus: '+s.focusRating+'/5':'No rating'}</div></div>`;
+      hist.appendChild(item);
+    });
+    if (!all.length) hist.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:0.85em;text-align:center;">No sessions yet</div>';
+  }
 </script>
-
 </body>
 </html>
