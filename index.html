@@ -5,157 +5,137 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Attention MRI</title>
 <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDNpqBSHe3Ba7hsxmM7k3e54Tk-gTRrOjc",
+    authDomain: "attention-mri.firebaseapp.com",
+    projectId: "attention-mri",
+    storageBucket: "attention-mri.firebasestorage.app",
+    messagingSenderId: "254217100361",
+    appId: "1:254217100361:web:fb63a96a8d33b21ddcf398"
+  };
+
+  const RELAY = 'https://attention-mri-relay.abhinalamalapu.workers.dev';
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+
+  // expose auth functions to non-module script
+  window._auth = auth;
+  window._signIn = (e, p) => signInWithEmailAndPassword(auth, e, p);
+  window._signUp = (e, p) => createUserWithEmailAndPassword(auth, e, p);
+  window._signOut = () => signOut(auth);
+  window._RELAY = RELAY;
+
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      window._userId = user.uid;
+      window._userEmail = user.email;
+      document.getElementById('authOverlay').style.display = 'none';
+      document.getElementById('appShell').style.display = 'block';
+      document.getElementById('settingsEmail').textContent = user.email;
+      // auto-fetch tunnel from relay
+      window._fetchTunnelFromRelay();
+      if (window._initApp) window._initApp();
+    } else {
+      window._userId = null;
+      document.getElementById('authOverlay').style.display = 'flex';
+      document.getElementById('appShell').style.display = 'none';
+    }
+  });
+</script>
 <style>
   :root {
-    --bg: #0a0a0f;
-    --surface: #13131a;
-    --surface2: #1c1c28;
-    --border: #ffffff12;
-    --text: #f0f0f5;
-    --muted: #8888a0;
-    --green: #30d158;
-    --yellow: #ffd60a;
-    --orange: #ff9f0a;
-    --red: #ff453a;
-    --blue: #0a84ff;
-    --radius: 18px;
-    --radius-sm: 12px;
+    --bg: #0a0a0f; --surface: #13131a; --surface2: #1c1c28;
+    --border: #ffffff12; --text: #f0f0f5; --muted: #8888a0;
+    --green: #30d158; --yellow: #ffd60a; --orange: #ff9f0a;
+    --red: #ff453a; --blue: #0a84ff;
+    --radius: 18px; --radius-sm: 12px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; }
-  body {
-    font-family: -apple-system, system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    max-width: 430px;
-    margin: 0 auto;
-    padding: 0 0 100px;
-    overflow-x: hidden;
-  }
+  body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); max-width: 430px; margin: 0 auto; overflow-x: hidden; }
 
-  /* ---- NAV BAR ---- */
-  nav {
-    position: fixed;
-    bottom: 0; left: 50%;
-    transform: translateX(-50%);
-    width: 100%; max-width: 430px;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    display: flex;
-    z-index: 100;
-    padding-bottom: env(safe-area-inset-bottom);
+  /* AUTH OVERLAY */
+  #authOverlay {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 32px; z-index: 500;
   }
-  nav button {
-    flex: 1; border: none; background: none;
-    color: var(--muted); padding: 12px 0 8px;
-    font-size: 0.65em; font-weight: 500;
-    display: flex; flex-direction: column; align-items: center; gap: 3px;
-    cursor: pointer; transition: color 0.2s;
-  }
+  #authOverlay h1 { font-size: 1.8em; font-weight: 800; margin-bottom: 6px; }
+  #authOverlay p { color: var(--muted); font-size: 0.85em; margin-bottom: 36px; text-align: center; line-height: 1.5; }
+  .auth-input { width: 100%; padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 0.95em; margin-bottom: 10px; outline: none; }
+  .auth-input:focus { border-color: var(--blue); }
+  .auth-btn { width: 100%; padding: 15px; border-radius: var(--radius-sm); border: none; font-size: 1em; font-weight: 700; cursor: pointer; margin-bottom: 10px; }
+  #authSignInBtn { background: var(--blue); color: #fff; }
+  #authSignUpBtn { background: var(--surface2); color: var(--text); }
+  #authError { color: var(--red); font-size: 0.8em; text-align: center; margin-top: 4px; min-height: 18px; }
+
+  /* APP SHELL */
+  #appShell { display: none; padding-bottom: 100px; }
+
+  /* NAV */
+  nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 430px; background: var(--surface); border-top: 1px solid var(--border); display: flex; z-index: 100; padding-bottom: env(safe-area-inset-bottom); }
+  nav button { flex: 1; border: none; background: none; color: var(--muted); padding: 12px 0 8px; font-size: 0.65em; font-weight: 500; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; transition: color 0.2s; }
   nav button.active { color: var(--blue); }
   nav button svg { width: 22px; height: 22px; stroke-width: 1.8; fill: none; stroke: currentColor; }
 
-  /* ---- PAGES ---- */
+  /* PAGES */
   .page { display: none; padding: 20px 16px 16px; animation: fadein 0.2s ease; }
   .page.active { display: block; }
   @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-  /* ---- TYPOGRAPHY ---- */
+  /* TYPOGRAPHY */
   .page-title { font-size: 1.5em; font-weight: 700; margin-bottom: 4px; }
   .page-sub { font-size: 0.85em; color: var(--muted); margin-bottom: 20px; }
   .section-label { font-size: 0.7em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 20px 0 8px; }
 
-  /* ---- CARDS ---- */
-  .card {
-    background: var(--surface);
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-    padding: 16px;
-    margin-bottom: 12px;
-  }
+  /* CARDS */
+  .card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); padding: 16px; margin-bottom: 12px; }
   .card-title { font-size: 0.8em; font-weight: 600; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
 
-  /* ---- BUTTONS ---- */
-  .btn {
-    width: 100%; padding: 15px;
-    border-radius: var(--radius-sm);
-    border: none; font-size: 1em; font-weight: 600;
-    cursor: pointer; transition: opacity 0.15s, transform 0.1s;
-    letter-spacing: 0.01em;
-  }
+  /* BUTTONS */
+  .btn { width: 100%; padding: 15px; border-radius: var(--radius-sm); border: none; font-size: 1em; font-weight: 600; cursor: pointer; transition: opacity 0.15s, transform 0.1s; letter-spacing: 0.01em; }
   .btn:active { opacity: 0.8; transform: scale(0.98); }
   .btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .btn-green { background: var(--green); color: #000; }
   .btn-red { background: var(--red); color: #fff; }
   .btn-surface { background: var(--surface2); color: var(--text); }
+  .btn-blue { background: var(--blue); color: #fff; }
 
-  /* ---- HOME: SESSION RING ---- */
+  /* HOME RING */
   #homeStatus { font-size: 0.85em; color: var(--muted); margin-bottom: 20px; }
-  .ring-wrap {
-    display: flex; justify-content: center; align-items: center;
-    margin: 24px 0 28px;
-    position: relative;
-  }
+  .ring-wrap { display: flex; justify-content: center; align-items: center; margin: 24px 0 28px; position: relative; }
   .ring-wrap svg { width: 180px; height: 180px; transform: rotate(-90deg); }
   .ring-bg { fill: none; stroke: var(--surface2); stroke-width: 10; }
-  .ring-fill {
-    fill: none; stroke: var(--green); stroke-width: 10;
-    stroke-linecap: round;
-    stroke-dasharray: 502;
-    stroke-dashoffset: 502;
-    transition: stroke-dashoffset 0.8s ease, stroke 0.5s ease;
-  }
-  .ring-center {
-    position: absolute;
-    display: flex; flex-direction: column; align-items: center;
-    pointer-events: none;
-  }
+  .ring-fill { fill: none; stroke: var(--green); stroke-width: 10; stroke-linecap: round; stroke-dasharray: 502; stroke-dashoffset: 502; transition: stroke-dashoffset 0.8s ease, stroke 0.5s ease; }
+  .ring-center { position: absolute; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
   #ringPct { font-size: 2.2em; font-weight: 700; }
   #ringLabel { font-size: 0.75em; color: var(--muted); margin-top: 2px; }
-  .state-badge {
-    text-align: center; padding: 8px 20px;
-    border-radius: 999px; font-size: 0.9em; font-weight: 600;
-    background: var(--surface2); color: var(--muted);
-    margin-bottom: 24px; display: inline-block;
-    width: 100%;
-  }
+  .state-badge { text-align: center; padding: 8px 20px; border-radius: 999px; font-size: 0.9em; font-weight: 600; background: var(--surface2); color: var(--muted); margin-bottom: 24px; display: inline-block; width: 100%; }
   .state-badge.deep { background: #30d15820; color: var(--green); }
   .state-badge.stable { background: #ffd60a20; color: var(--yellow); }
   .state-badge.fragmented { background: #ff9f0a20; color: var(--orange); }
   .state-badge.fatigued { background: #ff453a20; color: var(--red); }
 
-  /* ---- STAT ROWS ---- */
+  /* STAT ROWS */
   .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
   .stat-row:last-child { border-bottom: none; }
   .stat-row .label { font-size: 0.9em; color: var(--muted); }
   .stat-row .value { font-size: 0.9em; font-weight: 600; }
 
-  /* ---- INPUTS ---- */
-  .input {
-    width: 100%; padding: 12px 14px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: var(--surface2);
-    color: var(--text); font-size: 0.95em;
-    outline: none;
-    transition: border-color 0.2s;
-  }
+  /* INPUTS */
+  .input { width: 100%; padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 0.95em; outline: none; transition: border-color 0.2s; }
   .input:focus { border-color: var(--blue); }
   .input-hint { font-size: 0.75em; color: var(--muted); margin-top: 6px; }
 
-  /* ---- TASKS ---- */
-  .task-row {
-    display: flex; align-items: center;
-    padding: 11px 0; border-bottom: 1px solid var(--border);
-    gap: 12px;
-  }
+  /* TASKS */
+  .task-row { display: flex; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--border); gap: 12px; }
   .task-row:last-child { border-bottom: none; }
-  .task-check {
-    width: 22px; height: 22px; border-radius: 50%;
-    border: 2px solid var(--border); background: none;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; cursor: pointer; transition: background 0.2s, border-color 0.2s;
-  }
+  .task-check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border); background: none; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
   .task-check.done { background: var(--green); border-color: var(--green); }
   .task-check.done::after { content: '✓'; color: #000; font-size: 0.75em; font-weight: 700; }
   .task-text { flex: 1; font-size: 0.9em; }
@@ -165,11 +145,8 @@
   .task-add-row .input { flex: 1; }
   .task-add-btn { padding: 12px 16px; border-radius: var(--radius-sm); border: none; background: var(--blue); color: #fff; font-weight: 600; font-size: 0.9em; cursor: pointer; white-space: nowrap; }
 
-  /* ---- HISTORY ITEMS ---- */
-  .history-item {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 12px 0; border-bottom: 1px solid var(--border);
-  }
+  /* HISTORY */
+  .history-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
   .history-item:last-child { border-bottom: none; }
   .history-left .h-date { font-size: 0.75em; color: var(--muted); }
   .history-left .h-duration { font-size: 0.95em; font-weight: 600; margin-top: 1px; }
@@ -177,35 +154,21 @@
   .history-right .h-presence { font-size: 0.85em; font-weight: 600; }
   .history-right .h-rating { font-size: 0.75em; color: var(--muted); margin-top: 1px; }
 
-  /* ---- WEEKLY CHART ---- */
+  /* WEEKLY CHART */
   .week-bars { display: flex; gap: 6px; align-items: flex-end; height: 80px; margin-top: 12px; }
   .week-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .week-bar { width: 100%; border-radius: 4px 4px 0 0; background: var(--surface2); min-height: 4px; }
   .week-bar.filled { background: var(--blue); }
   .week-day-label { font-size: 0.6em; color: var(--muted); }
 
-  /* ---- FOCUS OVERLAY ---- */
-  #focusOverlay {
-    display: none; position: fixed;
-    inset: 0; background: #000;
-    z-index: 200; flex-direction: column;
-    align-items: center; justify-content: center;
-    padding: 40px 24px;
-  }
+  /* FOCUS OVERLAY */
+  #focusOverlay { display: none; position: fixed; inset: 0; background: #000; z-index: 200; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px; }
   #focusOverlay.active { display: flex; }
-  #focusVideoWrap {
-    position: relative; width: 200px; height: 200px;
-    border-radius: 50%; overflow: hidden; margin-bottom: 32px;
-    border: 3px solid var(--surface2);
-    transition: border-color 0.6s, box-shadow 0.6s;
-  }
+  #focusVideoWrap { position: relative; width: 200px; height: 200px; border-radius: 50%; overflow: hidden; margin-bottom: 32px; border: 3px solid var(--surface2); transition: border-color 0.6s, box-shadow 0.6s; }
   #focusVideoWrap.present { border-color: var(--green); box-shadow: 0 0 30px #30d15840; }
   #focusVideoWrap.absent { border-color: var(--surface2); box-shadow: none; }
   #focusPreview { width: 100%; height: 100%; object-fit: cover; display: block; transform: scaleX(-1); }
-  #focusStateLabel {
-    font-size: 1.6em; font-weight: 700; text-align: center; margin-bottom: 8px;
-    transition: color 0.5s;
-  }
+  #focusStateLabel { font-size: 1.6em; font-weight: 700; text-align: center; margin-bottom: 8px; transition: color 0.5s; }
   #focusTimer { font-size: 3em; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 20px; font-variant-numeric: tabular-nums; }
   #focusMetaRow { display: flex; gap: 32px; margin-bottom: 40px; }
   .focus-meta { text-align: center; }
@@ -214,37 +177,22 @@
   #focusDebug { font-size: 0.65em; color: #444; text-align: center; margin-bottom: 20px; max-width: 300px; }
   #focusStopBtn { width: 200px; padding: 14px; border-radius: 999px; border: 2px solid var(--red); background: none; color: var(--red); font-size: 1em; font-weight: 600; cursor: pointer; }
 
-  /* ---- POST-SESSION RATING ---- */
-  #ratingOverlay {
-    display: none; position: fixed;
-    inset: 0; background: rgba(0,0,0,0.95);
-    z-index: 300; flex-direction: column;
-    align-items: center; justify-content: center;
-    padding: 32px;
-  }
+  /* RATING */
+  #ratingOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 300; flex-direction: column; align-items: center; justify-content: center; padding: 32px; }
   #ratingOverlay.active { display: flex; }
   #ratingOverlay h2 { font-size: 1.3em; font-weight: 700; text-align: center; margin-bottom: 8px; }
   #ratingOverlay p { font-size: 0.85em; color: var(--muted); text-align: center; margin-bottom: 32px; line-height: 1.5; }
   .rating-stars { display: flex; gap: 12px; margin-bottom: 32px; }
-  .rating-star {
-    width: 52px; height: 52px; border-radius: 14px;
-    background: var(--surface2); border: 2px solid var(--border);
-    font-size: 1.2em; font-weight: 700; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: background 0.15s, border-color 0.15s, transform 0.1s;
-    color: var(--text);
-  }
+  .rating-star { width: 52px; height: 52px; border-radius: 14px; background: var(--surface2); border: 2px solid var(--border); font-size: 1.2em; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s, border-color 0.15s, transform 0.1s; color: var(--text); }
   .rating-star:active { transform: scale(0.92); }
   .rating-star.selected { background: var(--blue); border-color: var(--blue); color: #fff; }
   #ratingSkip { background: none; border: none; color: var(--muted); font-size: 0.85em; cursor: pointer; padding: 8px; width: auto; }
 
-  /* ---- SETTINGS ---- */
-  .settings-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--border); }
-  .settings-row:last-child { border-bottom: none; }
-  .settings-row .s-label { font-size: 0.9em; }
-  .settings-row .s-sub { font-size: 0.75em; color: var(--muted); margin-top: 2px; }
-  .dot-badge { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; margin-left: 6px; }
-  .dot-badge.off { background: var(--muted); }
+  /* CONNECTION BADGE */
+  .conn-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 0.75em; padding: 4px 10px; border-radius: 999px; background: var(--surface2); color: var(--muted); }
+  .conn-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+  .conn-badge.connected { color: var(--green); }
+  .conn-badge.connected .dot { background: var(--green); }
 
   #videoHidden { display: none; }
 </style>
@@ -253,100 +201,105 @@
 
 <video id="videoHidden" autoplay playsinline muted></video>
 
-<!-- HOME -->
-<div class="page active" id="page-home">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-    <div class="page-title">Attention MRI</div>
-    <div id="connectionDot" class="dot-badge off"></div>
-  </div>
-  <div class="page-sub" id="homeStatus">Loading face detection model…</div>
-
-  <div class="ring-wrap">
-    <svg viewBox="0 0 180 180">
-      <circle class="ring-bg" cx="90" cy="90" r="80"/>
-      <circle class="ring-fill" id="ringFill" cx="90" cy="90" r="80"/>
-    </svg>
-    <div class="ring-center">
-      <div id="ringPct">--</div>
-      <div id="ringLabel">presence</div>
-    </div>
-  </div>
-
-  <div class="state-badge" id="stateBadge">Ready to focus</div>
-  <button class="btn btn-green" id="sessionBtn" disabled>Start Focus Session</button>
-
-  <div class="section-label">Today</div>
-  <div class="card">
-    <div class="stat-row"><span class="label">Sessions</span><span class="value" id="sumSessions">0</span></div>
-    <div class="stat-row"><span class="label">Focus time</span><span class="value" id="sumTime">0:00</span></div>
-    <div class="stat-row"><span class="label">Avg presence</span><span class="value" id="sumPresence">--</span></div>
-    <div class="stat-row"><span class="label">Avg computer idle</span><span class="value" id="sumComputerIdle">--</span></div>
-  </div>
+<!-- AUTH OVERLAY -->
+<div id="authOverlay">
+  <h1>Attention MRI</h1>
+  <p>Sign in to sync your computer connection and access your session history.</p>
+  <input class="auth-input" id="authEmail" type="email" placeholder="Email" autocomplete="email">
+  <input class="auth-input" id="authPassword" type="password" placeholder="Password" autocomplete="current-password">
+  <button class="auth-btn" id="authSignInBtn">Sign In</button>
+  <button class="auth-btn" id="authSignUpBtn">Create Account</button>
+  <div id="authError"></div>
 </div>
 
-<!-- GOALS -->
-<div class="page" id="page-tasks">
-  <div class="page-title">Goals</div>
-  <div class="page-sub">Today's focus targets</div>
-  <div class="task-add-row">
-    <input class="input" id="taskInput" placeholder="Add a goal…">
-    <button class="task-add-btn" id="addTaskBtn">Add</button>
-  </div>
-  <div class="card">
-    <div id="taskList"></div>
-    <div class="stat-row" style="margin-top:4px;">
-      <span class="label">Completed</span>
-      <span class="value" id="taskProgress">0 / 0</span>
+<!-- APP SHELL -->
+<div id="appShell">
+
+  <!-- HOME -->
+  <div class="page active" id="page-home">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <div class="page-title">Attention MRI</div>
+      <div class="conn-badge" id="connBadge"><div class="dot"></div><span id="connBadgeText">Connecting…</span></div>
     </div>
-  </div>
-</div>
-
-<!-- HISTORY -->
-<div class="page" id="page-history">
-  <div class="page-title">History</div>
-  <div class="page-sub">Past sessions and trends</div>
-  <div class="section-label">This week</div>
-  <div class="card">
-    <div class="card-title">Daily focus time (minutes)</div>
-    <div class="week-bars" id="weekBars"></div>
-  </div>
-  <div class="section-label">Recent sessions</div>
-  <div class="card" id="sessionHistory"></div>
-</div>
-
-<!-- SETTINGS -->
-<div class="page" id="page-settings">
-  <div class="page-title">Settings</div>
-  <div class="page-sub">Computer connection & privacy</div>
-
-  <div class="section-label">Computer connection</div>
-  <div class="card">
-    <div class="card-title">Tunnel URL</div>
-    <input class="input" id="computerSetup" placeholder="https://your-tunnel.trycloudflare.com">
-    <div class="input-hint" style="margin-top:8px;">Run cloudflared-windows-amd64.exe tunnel --url http://localhost:5000 on your computer, paste the URL here.</div>
-    <div class="stat-row" style="margin-top:8px;">
-      <span class="label">Status</span>
-      <span class="value" id="connStatus" style="color:var(--muted)">Not tested</span>
+    <div class="page-sub" id="homeStatus">Loading face detection model…</div>
+    <div class="ring-wrap">
+      <svg viewBox="0 0 180 180">
+        <circle class="ring-bg" cx="90" cy="90" r="80"/>
+        <circle class="ring-fill" id="ringFill" cx="90" cy="90" r="80"/>
+      </svg>
+      <div class="ring-center">
+        <div id="ringPct">--</div>
+        <div id="ringLabel">presence</div>
+      </div>
     </div>
-    <button class="btn btn-surface" id="testConnBtn" style="margin-top:12px;">Test Connection</button>
+    <div class="state-badge" id="stateBadge">Ready to focus</div>
+    <button class="btn btn-green" id="sessionBtn" disabled>Start Focus Session</button>
+    <div class="section-label">Today</div>
+    <div class="card">
+      <div class="stat-row"><span class="label">Sessions</span><span class="value" id="sumSessions">0</span></div>
+      <div class="stat-row"><span class="label">Focus time</span><span class="value" id="sumTime">0:00</span></div>
+      <div class="stat-row"><span class="label">Avg presence</span><span class="value" id="sumPresence">--</span></div>
+      <div class="stat-row"><span class="label">Avg computer idle</span><span class="value" id="sumComputerIdle">--</span></div>
+    </div>
   </div>
 
-  <div class="section-label">Privacy</div>
-  <div class="card">
-    <div class="settings-row">
-      <div><div class="s-label">Camera recording</div><div class="s-sub">Video never stored or transmitted</div></div>
-      <span style="color:var(--green);font-size:0.8em;font-weight:600;">OFF</span>
+  <!-- GOALS -->
+  <div class="page" id="page-tasks">
+    <div class="page-title">Goals</div>
+    <div class="page-sub">Today's focus targets</div>
+    <div class="task-add-row">
+      <input class="input" id="taskInput" placeholder="Add a goal…">
+      <button class="task-add-btn" id="addTaskBtn">Add</button>
     </div>
-    <div class="settings-row">
-      <div><div class="s-label">Keystroke content</div><div class="s-sub">Only count logged, never content</div></div>
-      <span style="color:var(--green);font-size:0.8em;font-weight:600;">OFF</span>
-    </div>
-    <div class="settings-row">
-      <div><div class="s-label">Data storage</div><div class="s-sub">Local device only</div></div>
-      <span style="color:var(--green);font-size:0.8em;font-weight:600;">ON DEVICE</span>
+    <div class="card">
+      <div id="taskList"></div>
+      <div class="stat-row" style="margin-top:4px;"><span class="label">Completed</span><span class="value" id="taskProgress">0 / 0</span></div>
     </div>
   </div>
-</div>
+
+  <!-- HISTORY -->
+  <div class="page" id="page-history">
+    <div class="page-title">History</div>
+    <div class="page-sub">Past sessions and trends</div>
+    <div class="section-label">This week</div>
+    <div class="card">
+      <div class="card-title">Daily focus time (minutes)</div>
+      <div class="week-bars" id="weekBars"></div>
+    </div>
+    <div class="section-label">Recent sessions</div>
+    <div class="card" id="sessionHistory"></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="page" id="page-settings">
+    <div class="page-title">Settings</div>
+    <div class="page-sub" id="settingsEmail"></div>
+    <div class="section-label">Computer connection</div>
+    <div class="card">
+      <div class="stat-row">
+        <span class="label">Status</span>
+        <span class="value" id="connStatus" style="color:var(--muted)">Checking…</span>
+      </div>
+      <div class="stat-row">
+        <span class="label">Connected tunnel</span>
+        <span class="value" id="connUrl" style="color:var(--muted);font-size:0.75em;word-break:break-all;">--</span>
+      </div>
+      <button class="btn btn-surface" id="refreshConnBtn" style="margin-top:12px;">Refresh Connection</button>
+      <div class="input-hint" style="margin-top:10px;">Connection updates automatically when your computer registers via the Chrome extension.</div>
+    </div>
+    <div class="section-label">Privacy</div>
+    <div class="card">
+      <div class="stat-row"><div><div style="font-size:.9em">Camera recording</div><div style="font-size:.75em;color:var(--muted)">Video never stored or transmitted</div></div><span style="color:var(--green);font-size:.8em;font-weight:600">OFF</span></div>
+      <div class="stat-row"><div><div style="font-size:.9em">Keystroke content</div><div style="font-size:.75em;color:var(--muted)">Count only, never content</div></div><span style="color:var(--green);font-size:.8em;font-weight:600">OFF</span></div>
+      <div class="stat-row"><div><div style="font-size:.9em">Session data</div><div style="font-size:.75em;color:var(--muted)">Stored locally on this device</div></div><span style="color:var(--green);font-size:.8em;font-weight:600">ON DEVICE</span></div>
+    </div>
+    <div class="section-label">Account</div>
+    <div class="card">
+      <button class="btn btn-surface" id="signOutBtn">Sign Out</button>
+    </div>
+  </div>
+
+</div><!-- end appShell -->
 
 <!-- FOCUS OVERLAY -->
 <div id="focusOverlay">
@@ -366,7 +319,7 @@
 <!-- RATING OVERLAY -->
 <div id="ratingOverlay">
   <h2>How focused were you?</h2>
-  <p>This validates whether the behavioral signals actually track your real experience — the core of the research.</p>
+  <p>This validates whether the behavioral signals actually track your real experience.</p>
   <div class="rating-stars" id="ratingStars">
     <div class="rating-star" data-val="1">1</div>
     <div class="rating-star" data-val="2">2</div>
@@ -380,24 +333,85 @@
 <!-- NAV -->
 <nav>
   <button class="active" data-page="home">
-    <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-    Home
+    <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
   </button>
   <button data-page="tasks">
-    <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-    Goals
+    <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>Goals
   </button>
   <button data-page="history">
-    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-    History
+    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>History
   </button>
   <button data-page="settings">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-    Settings
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings
   </button>
 </nav>
 
 <script>
+  // AUTH
+  document.getElementById('authSignInBtn').addEventListener('click', async () => {
+    const e = document.getElementById('authEmail').value.trim();
+    const p = document.getElementById('authPassword').value;
+    try { await window._signIn(e, p); }
+    catch(err) { document.getElementById('authError').textContent = err.message.replace('Firebase: ',''); }
+  });
+  document.getElementById('authSignUpBtn').addEventListener('click', async () => {
+    const e = document.getElementById('authEmail').value.trim();
+    const p = document.getElementById('authPassword').value;
+    try { await window._signUp(e, p); }
+    catch(err) { document.getElementById('authError').textContent = err.message.replace('Firebase: ',''); }
+  });
+  document.getElementById('signOutBtn').addEventListener('click', () => window._signOut());
+
+  // RELAY
+  let currentTunnelUrl = null;
+  window._fetchTunnelFromRelay = async function() {
+    const userId = window._userId;
+    if (!userId) return;
+    try {
+      const res = await fetch(`${window._RELAY}/lookup/${userId}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data.ok && data.tunnelUrl) {
+        currentTunnelUrl = data.tunnelUrl;
+        document.getElementById('connUrl').textContent = data.tunnelUrl;
+        document.getElementById('connStatus').textContent = 'Found — testing…';
+        document.getElementById('connStatus').style.color = 'var(--muted)';
+        // test the tunnel
+        try {
+          const r2 = await fetch(`${data.tunnelUrl}/status`, { cache: 'no-store', signal: AbortSignal.timeout(4000) });
+          const d2 = await r2.json();
+          if (d2.ok) {
+            document.getElementById('connStatus').textContent = `Connected · idle ${d2.idle_percent}%`;
+            document.getElementById('connStatus').style.color = 'var(--green)';
+            document.getElementById('connBadge').classList.add('connected');
+            document.getElementById('connBadgeText').textContent = 'Computer connected';
+          } else throw new Error('not ok');
+        } catch {
+          document.getElementById('connStatus').textContent = 'Tunnel offline — restart computer scripts';
+          document.getElementById('connStatus').style.color = 'var(--orange)';
+        }
+      } else {
+        currentTunnelUrl = null;
+        document.getElementById('connStatus').textContent = 'No computer registered yet';
+        document.getElementById('connStatus').style.color = 'var(--muted)';
+        document.getElementById('connBadgeText').textContent = 'No computer';
+      }
+    } catch {
+      document.getElementById('connStatus').textContent = 'Relay unreachable';
+      document.getElementById('connStatus').style.color = 'var(--red)';
+    }
+  };
+
+  document.getElementById('refreshConnBtn').addEventListener('click', window._fetchTunnelFromRelay);
+
+  async function fetchComputer() {
+    if (!currentTunnelUrl) return null;
+    try {
+      const res = await fetch(`${currentTunnelUrl}/status`, { cache: 'no-store', signal: AbortSignal.timeout(4000) });
+      const data = await res.json();
+      return data.ok ? data : null;
+    } catch { return null; }
+  }
+
   // NAV
   document.querySelectorAll('nav button').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -415,7 +429,7 @@
   function todayKey() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
   function getToday(h) { const k = todayKey(); if (!h[k]) h[k] = { sessions: [], tasks: [] }; return h[k]; }
 
-  // STATE CLASSIFICATION — idle is validated; presence is shown but not yet validated
+  // STATE CLASSIFICATION
   function classifyState(presencePct, idlePct) {
     if (idlePct !== null) {
       if (idlePct <= 15) return 'deep';
@@ -430,10 +444,10 @@
     return 'fatigued';
   }
   const STATE = {
-    deep:       { label: 'Deep Focus',          color: 'var(--green)',  cls: 'deep' },
-    stable:     { label: 'Stable Attention',     color: 'var(--yellow)', cls: 'stable' },
-    fragmented: { label: 'Fragmented Attention', color: 'var(--orange)', cls: 'fragmented' },
-    fatigued:   { label: 'Cognitive Fatigue',    color: 'var(--red)',    cls: 'fatigued' },
+    deep:       { label: 'Deep Focus',          color: 'var(--green)'  },
+    stable:     { label: 'Stable Attention',     color: 'var(--yellow)' },
+    fragmented: { label: 'Fragmented Attention', color: 'var(--orange)' },
+    fatigued:   { label: 'Cognitive Fatigue',    color: 'var(--red)'    },
   };
 
   // RING
@@ -444,38 +458,7 @@
     ringFill.style.stroke = color || 'var(--green)';
   }
 
-  // COMPUTER CONNECTION
-  const computerSetupInput = document.getElementById('computerSetup');
-  computerSetupInput.value = localStorage.getItem('amri_addr') || '';
-  computerSetupInput.addEventListener('change', () => localStorage.setItem('amri_addr', computerSetupInput.value.trim()));
-
-  let lastIdle = null;
-
-  async function fetchComputer() {
-    const addr = computerSetupInput.value.trim();
-    if (!addr) return null;
-    const base = addr.startsWith('http') ? addr.replace(/\/$/, '') : `https://${addr}`;
-    try {
-      const res = await fetch(`${base}/status`, { cache: 'no-store', signal: AbortSignal.timeout(4000) });
-      const data = await res.json();
-      if (data.ok) {
-        lastIdle = data.idle_percent;
-        document.getElementById('connectionDot').className = 'dot-badge';
-        return data;
-      }
-    } catch {}
-    lastIdle = null;
-    document.getElementById('connectionDot').className = 'dot-badge off';
-    return null;
-  }
-
-  document.getElementById('testConnBtn').addEventListener('click', async () => {
-    const el = document.getElementById('connStatus');
-    el.textContent = 'Testing…'; el.style.color = 'var(--muted)';
-    const data = await fetchComputer();
-    if (data) { el.textContent = `Connected · idle ${data.idle_percent}%`; el.style.color = 'var(--green)'; }
-    else { el.textContent = 'Failed — check URL and tunnel'; el.style.color = 'var(--red)'; }
-  });
+  function formatTime(s) { return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
 
   // FACE DETECTION
   const videoHidden = document.getElementById('videoHidden');
@@ -483,11 +466,12 @@
   const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
   let modelsLoaded = false, stream = null, sessionActive = false;
   let sessionStart = null, timerInterval = null, detectionInterval = null, computerInterval = null;
-  let activeFrames = 0, totalFrames = 0, pendingSession = null;
+  let activeFrames = 0, totalFrames = 0, lastIdle = null, pendingSession = null;
 
-  function formatTime(s) { return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
-
-  window.addEventListener('load', async () => {
+  let appInited = false;
+  window._initApp = async function() {
+    if (appInited) return;
+    appInited = true;
     const wait = () => new Promise(r => { const c = () => window.faceapi ? r() : setTimeout(c, 100); c(); });
     await wait();
     try {
@@ -499,7 +483,7 @@
       document.getElementById('homeStatus').textContent = 'Face model failed to load — check connection.';
     }
     renderSummary(); renderTasks();
-  });
+  };
 
   async function startSession() {
     try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } }); }
@@ -521,9 +505,9 @@
     detectionInterval = setInterval(runDetection, 1500);
     computerInterval = setInterval(async () => {
       const d = await fetchComputer();
-      if (d) document.getElementById('fmIdle').textContent = d.idle_percent + '%';
+      if (d) { lastIdle = d.idle_percent; document.getElementById('fmIdle').textContent = d.idle_percent + '%'; }
     }, 5000);
-    fetchComputer().then(d => { if (d) document.getElementById('fmIdle').textContent = d.idle_percent + '%'; });
+    fetchComputer().then(d => { if (d) { lastIdle = d.idle_percent; document.getElementById('fmIdle').textContent = d.idle_percent + '%'; } });
   }
 
   async function runDetection() {
@@ -536,7 +520,6 @@
       document.getElementById('fmPresence').textContent = pct + '%';
       document.getElementById('focusVideoWrap').className = det ? 'present' : 'absent';
       document.getElementById('focusDebug').textContent = det ? `Face detected · score ${det.score.toFixed(2)}` : 'No face detected this check';
-      // update ring and state
       setRing(pct, det ? 'var(--green)' : 'var(--red)');
       document.getElementById('ringPct').textContent = pct + '%';
       const state = classifyState(pct, lastIdle);
@@ -561,7 +544,6 @@
   document.getElementById('sessionBtn').addEventListener('click', startSession);
   document.getElementById('focusStopBtn').addEventListener('click', stopSession);
 
-  // RATING
   document.querySelectorAll('.rating-star').forEach(star => {
     star.addEventListener('click', () => {
       const val = parseInt(star.dataset.val);
@@ -586,7 +568,6 @@
     document.getElementById('homeStatus').textContent = 'Tap to begin a focus session';
   }
 
-  // SUMMARY
   function renderSummary() {
     const h = loadHistory(); const s = getToday(h).sessions;
     document.getElementById('sumSessions').textContent = s.length;
@@ -597,12 +578,10 @@
     document.getElementById('sumComputerIdle').textContent = wi.length ? Math.round(wi.reduce((a,x) => a+x.computerIdle,0)/wi.length)+'%' : '--';
   }
 
-  // TASKS
   function getTasks() { const h = loadHistory(); return getToday(h).tasks; }
   function setTasks(t) { const h = loadHistory(); getToday(h).tasks = t; saveHistory(h); }
   function renderTasks() {
-    const tasks = getTasks();
-    const list = document.getElementById('taskList');
+    const tasks = getTasks(); const list = document.getElementById('taskList');
     list.innerHTML = '';
     tasks.forEach((task, i) => {
       const row = document.createElement('div'); row.className = 'task-row';
@@ -625,18 +604,17 @@
   });
   document.getElementById('taskInput').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('addTaskBtn').click(); });
 
-  // HISTORY
   function renderHistory() {
     const h = loadHistory();
     const days = Object.keys(h).sort().slice(-7);
     const bars = document.getElementById('weekBars');
     bars.innerHTML = '';
-    const maxMins = Math.max(...days.map(d => Math.round(h[d].sessions.reduce((s,x) => s+x.secs,0)/60)), 1);
+    const maxMins = Math.max(...days.map(d => Math.round(h[d].sessions.reduce((s,x)=>s+x.secs,0)/60)), 1);
     const dn = ['Su','Mo','Tu','We','Th','Fr','Sa'];
     days.forEach(day => {
-      const mins = Math.round(h[day].sessions.reduce((s,x) => s+x.secs,0)/60);
-      const hp = Math.max((mins/maxMins)*100, mins > 0 ? 5 : 0);
-      const d = new Date(day + 'T12:00:00');
+      const mins = Math.round(h[day].sessions.reduce((s,x)=>s+x.secs,0)/60);
+      const hp = Math.max((mins/maxMins)*100, mins>0?5:0);
+      const d = new Date(day+'T12:00:00');
       const w = document.createElement('div'); w.className = 'week-bar-wrap';
       w.innerHTML = `<div class="week-bar ${mins>0?'filled':''}" style="height:${hp}%"></div><div class="week-day-label">${dn[d.getDay()]}</div>`;
       bars.appendChild(w);
