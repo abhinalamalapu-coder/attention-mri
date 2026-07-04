@@ -37,6 +37,7 @@
       document.getElementById('authOverlay').style.display = 'none';
       document.getElementById('appShell').style.display = 'block';
       document.getElementById('settingsEmail').textContent = user.email;
+      document.getElementById('settingsUid').textContent = user.uid;
       // auto-fetch tunnel from relay
       window._fetchTunnelFromRelay();
       if (window._initApp) window._initApp();
@@ -295,7 +296,10 @@
     </div>
     <div class="section-label">Account</div>
     <div class="card">
-      <button class="btn btn-surface" id="signOutBtn">Sign Out</button>
+      <div class="stat-row"><span class="label">Email</span><span class="value" id="settingsEmail" style="font-size:0.8em"></span></div>
+      <div class="stat-row"><span class="label">User ID</span><span class="value" id="settingsUid" style="font-size:0.65em;word-break:break-all;color:var(--muted)"></span></div>
+      <div class="input-hint" style="margin-top:4px;">Copy this User ID into the Chrome extension to link your computer.</div>
+      <button class="btn btn-surface" id="signOutBtn" style="margin-top:12px;">Sign Out</button>
     </div>
   </div>
 
